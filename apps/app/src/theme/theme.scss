@@ -1,0 +1,402 @@
+// Tema VoiceScheduler sobre Bootstrap 5.
+// Cuando llegue la plantilla comprada, se reemplazan estas variables — no las pantallas.
+
+$primary: #0f6e56;
+$success: #1d9e75;
+$warning: #ba7517;
+$danger: #a32d2d;
+$body-bg: #f4f3ef;
+$body-color: #2c2c2a;
+$border-radius: 0.5rem;
+$border-radius-lg: 0.75rem;
+$font-family-sans-serif:
+  system-ui,
+  -apple-system,
+  'Segoe UI',
+  Roboto,
+  'Helvetica Neue',
+  sans-serif;
+
+@import 'bootstrap/scss/bootstrap';
+
+// Tokens propios del calendario (modalidades, RN-161)
+:root {
+  --vs-clinic-bg: #e1f5ee;
+  --vs-clinic-border: #5dcaa5;
+  --vs-clinic-text: #085041;
+  --vs-clinic-time: #0f6e56;
+  --vs-home-bg: #faeeda;
+  --vs-home-border: #ef9f27;
+  --vs-home-text: #633806;
+  --vs-home-time: #854f0b;
+  --vs-unpaid: #854f0b;
+}
+
+// ── Shell móvil ──────────────────────────────────────────────────────────────
+.vs-shell {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-shadow: 0 0 24px rgb(0 0 0 / 6%);
+}
+
+.vs-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 12px 96px;
+}
+
+// ── Calendario: vista día ────────────────────────────────────────────────────
+.vs-cal {
+  position: relative;
+}
+
+.vs-hourline {
+  position: absolute;
+  left: 44px;
+  right: 0;
+  border-top: 1px solid rgb(0 0 0 / 8%);
+}
+
+.vs-hourlabel {
+  position: absolute;
+  left: 0;
+  transform: translateY(-55%);
+  font-size: 11px;
+  color: $gray-500;
+}
+
+.vs-grid {
+  position: absolute;
+  left: 48px;
+  right: 4px;
+  top: 0;
+  bottom: 0;
+}
+
+.vs-dim {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: repeating-linear-gradient(-45deg, rgb(0 0 0 / 3%), rgb(0 0 0 / 3%) 6px, transparent 6px, transparent 12px), #f4f3ef;
+  border-radius: 6px;
+}
+
+.vs-apt {
+  position: absolute;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1.3;
+  overflow: hidden;
+  cursor: pointer;
+
+  .vs-apt-name {
+    font-weight: 600;
+  }
+
+  .vs-apt-time {
+    font-size: 11px;
+  }
+}
+
+.vs-apt-clinic {
+  background: var(--vs-clinic-bg);
+  border: 1px solid var(--vs-clinic-border);
+  color: var(--vs-clinic-text);
+
+  .vs-apt-time {
+    color: var(--vs-clinic-time);
+  }
+}
+
+.vs-apt-done {
+  opacity: 0.55;
+}
+
+.vs-apt-home {
+  background: var(--vs-home-bg);
+  border: 1px solid var(--vs-home-border);
+  color: var(--vs-home-text);
+
+  .vs-apt-time {
+    color: var(--vs-home-time);
+  }
+}
+
+.vs-unpaid {
+  color: var(--vs-unpaid);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.vs-exception {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: #efeee9;
+  border: 1px dashed $gray-400;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  color: $gray-600;
+}
+
+.vs-add-lane {
+  position: absolute;
+  right: 0;
+  width: 28px;
+  border: 1px dashed var(--vs-clinic-border);
+  background: rgb(225 245 238 / 40%);
+  color: var(--vs-clinic-time);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  line-height: 1.2;
+  padding: 0;
+  cursor: pointer;
+
+  i {
+    font-size: 13px;
+  }
+
+  &.full {
+    border-style: solid;
+    background: transparent;
+    cursor: default;
+    color: $gray-600;
+    border-color: $gray-400;
+  }
+
+  &.maxed {
+    color: $danger;
+    border-color: $danger;
+  }
+}
+
+.vs-cap-chip {
+  position: absolute;
+  right: 2px;
+  font-size: 11px;
+  background: #fff;
+  border: 1px solid $gray-300;
+  border-radius: 10px;
+  padding: 1px 7px;
+  color: $gray-600;
+  z-index: 2;
+}
+
+// ── Calendario: vista semana ─────────────────────────────────────────────────
+.vs-wk-head {
+  display: grid;
+  grid-template-columns: 36px repeat(7, 1fr);
+  text-align: center;
+  font-size: 11px;
+  color: $gray-500;
+
+  .vs-wk-daynum {
+    width: 24px;
+    height: 24px;
+    line-height: 24px;
+    border-radius: 50%;
+    margin: 2px auto 0;
+    font-size: 12px;
+    color: $body-color;
+
+    &.today {
+      background: $primary;
+      color: #fff;
+      font-weight: 600;
+    }
+  }
+}
+
+.vs-wk-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px repeat(7, 1fr);
+  margin-top: 6px;
+}
+
+.vs-wk-col {
+  position: relative;
+  border-left: 1px solid rgb(0 0 0 / 5%);
+
+  &.dim {
+    background: #f4f3ef;
+  }
+
+  &.today {
+    background: rgba(15, 110, 86, 0.06);
+  }
+}
+
+.vs-wk-block {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  border-radius: 4px;
+
+  &.clinic {
+    background: var(--vs-clinic-border);
+  }
+
+  &.home {
+    background: var(--vs-home-border);
+  }
+
+  &.half-l {
+    right: 52%;
+  }
+
+  &.half-r {
+    left: 52%;
+  }
+}
+
+.vs-wk-hourlabel {
+  position: relative;
+  font-size: 11px;
+  color: $gray-500;
+}
+
+// ── FAB y navegación inferior ────────────────────────────────────────────────
+.vs-fab {
+  position: fixed;
+  bottom: 76px;
+  right: max(16px, calc(50% - 240px + 16px));
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: $primary;
+  color: #fff;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgb(15 110 86 / 35%);
+  z-index: 10;
+}
+
+.vs-bottomnav {
+  position: fixed;
+  bottom: 0;
+  left: max(0px, calc(50% - 240px));
+  width: min(100%, 480px);
+  background: #fff;
+  border-top: 1px solid rgb(0 0 0 / 8%);
+  display: flex;
+  padding: 6px 0 max(10px, env(safe-area-inset-bottom));
+  z-index: 10;
+
+  button {
+    flex: 1;
+    border: none;
+    background: none;
+    font-size: 11px;
+    color: $gray-500;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+
+    i {
+      font-size: 20px;
+    }
+
+    &.active {
+      color: $primary;
+    }
+  }
+}
+
+// ── Hoja del asistente de voz ────────────────────────────────────────────────
+.vs-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 35%);
+  z-index: 30;
+}
+
+.vs-sheet {
+  position: fixed;
+  bottom: 0;
+  left: max(0px, calc(50% - 240px));
+  width: min(100%, 480px);
+  background: #fff;
+  border-radius: 20px 20px 0 0;
+  z-index: 31;
+  padding: 16px 16px calc(20px + env(safe-area-inset-bottom));
+  max-height: 80dvh;
+  overflow-y: auto;
+  box-shadow: 0 -6px 24px rgb(0 0 0 / 12%);
+}
+
+.vs-mic-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  flex-shrink: 0;
+  background: $primary;
+  color: #fff;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vs-mic-live {
+  background: $danger;
+  animation: vs-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes vs-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(163 45 45 / 35%);
+  }
+
+  50% {
+    box-shadow: 0 0 0 12px rgb(163 45 45 / 0%);
+  }
+}
+
+.vs-confirm-card {
+  border: 1px solid var(--vs-clinic-border);
+  border-radius: 12px;
+  padding: 14px;
+
+  &.low {
+    border-color: $warning;
+    background: #fff9ec;
+  }
+}
+
+.vs-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: $gray-600;
+  padding: 10px 4px;
+
+  .swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    margin-right: 4px;
+  }
+}
