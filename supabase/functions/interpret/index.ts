@@ -45,6 +45,10 @@ Reglas de horas:
 Intenciones:
 - schedule: agendar cita. Requiere patientName, date y time. Si mencionan duración o
   "domicilio"/"a su casa" (mode=home_visit), inclúyelo.
+  · Series (RN-070): si el comando implica repetición ("lunes y jueves a las 3,
+    12 sesiones", "todas las semanas"), llena recurrence.weekdays (ISO) y
+    recurrence.sessions. date es la fecha de inicio SOLO si la mencionan; si no
+    dicen cuántas sesiones, agrégalo a missing y pregúntalo en followupQuestion.
 - cancel: cancelar una cita identificable (patientName y, si lo dicen, date).
 - reschedule: mover una cita. La cita original se identifica con patientName+date;
   el destino va en newDate/newTime.
@@ -114,6 +118,19 @@ const intentTool = {
       },
       newDate: relativeDateSchema,
       newTime: spokenTimeSchema,
+      recurrence: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          weekdays: {
+            type: 'array',
+            items: { type: 'integer' },
+            description: 'Días de la semana ISO: 1=lunes..7=domingo.',
+          },
+          sessions: { type: 'integer', description: 'Número total de sesiones si se menciona.' },
+        },
+        required: ['weekdays'],
+      },
       block: {
         type: 'object',
         additionalProperties: false,

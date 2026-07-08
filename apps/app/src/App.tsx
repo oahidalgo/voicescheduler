@@ -3,7 +3,8 @@ import type { Session } from '@supabase/supabase-js';
 import { addDays, weekdayOf, zonedNow } from '@voicescheduler/core';
 import { DayView } from './calendar/DayView';
 import { WeekView } from './calendar/WeekView';
-import { AppointmentDetailModal, NewAppointmentModal } from './calendar/modals';
+import { AppointmentDetailModal, BlockTimeModal, ModalShell, NewAppointmentModal } from './calendar/modals';
+import { deleteException } from './lib/api';
 import { LoginScreen } from './auth/LoginScreen';
 import { PatientsScreen } from './patients/PatientsScreen';
 import { VoiceSheet } from './voice/VoiceSheet';
@@ -53,6 +54,9 @@ function AgendaApp({ live, email }: { live: boolean; email: string | null }) {
   const [newAt, setNewAt] = useState<number | null>(null);
   const [detail, setDetail] = useState<UiAppointment | null>(null);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [blockOpen, setBlockOpen] = useState(false);
+  const [exToDelete, setExToDelete] = useState<{ id: string; label: string } | null>(null);
+  const [exBusy, setExBusy] = useState(false);
 
   const today = zonedNow(agenda.config.timezone).date;
   const monday = addDays(selectedDate, 1 - weekdayOf(selectedDate));
@@ -118,7 +122,18 @@ function AgendaApp({ live, email }: { live: boolean; email: string | null }) {
           </div>
         </div>
         {screen === 'agenda' && (
-          <div className="btn-group" role="group" aria-label="Modo de vista">
+          <div className="d-flex align-items-center gap-2">
+            {live && (
+              <button
+                className="btn btn-sm btn-outline-secondary"
+                aria-label="Bloquear tiempo"
+                title="Bloquear tiempo"
+                onClick={() => setBlockOpen(true)}
+              >
+                <i className="bi bi-calendar-x" />
+              </button>
+            )}
+            <div className="btn-group" role="group" aria-label="Modo de vista">
             <button
               className={`btn btn-sm ${view === 'day' ? 'btn-primary' : 'btn-outline-secondary'}`}
               onClick={() => setView('day')}
@@ -131,6 +146,7 @@ function AgendaApp({ live, email }: { live: boolean; email: string | null }) {
             >
               Semana
             </button>
+            </div>
           </div>
         )}
       </header>
@@ -165,6 +181,19 @@ function AgendaApp({ live, email }: { live: boolean; email: string | null }) {
             config={agenda.config}
             onTapEmpty={live ? setNewAt : undefined}
             onTapAppointment={live ? setDetail : undefined}
+            onTapException={
+              live
+                ? exception => {
+                    const id = (exception as { id?: string }).id;
+                    if (id && exception.type === 'time_block') {
+                      setExToDelete({
+                        id,
+                        label: `${exception.reason ?? 'Bloqueo'} · ${formatDate(exception.date)}`,
+                      });
+                    }
+                  }
+                : undefined
+            }
           />
         ) : (
           <WeekView
@@ -229,6 +258,43 @@ function AgendaApp({ live, email }: { live: boolean; email: string | null }) {
             agenda.reload();
           }}
         />
+      )}
+      {blockOpen && (
+        <BlockTimeModal
+          date={selectedDate}
+          appointments={agenda.appointments}
+          onClose={() => setBlockOpen(false)}
+          onCreated={() => {
+            setBlockOpen(false);
+            agenda.reload();
+          }}
+        />
+      )}
+      {exToDelete && (
+        <ModalShell title="Eliminar bloqueo" onClose={() => setExToDelete(null)}>
+          <p>{exToDelete.label}</p>
+          <div className="d-flex gap-2">
+            <button
+              className="btn btn-danger flex-fill"
+              disabled={exBusy}
+              onClick={async () => {
+                setExBusy(true);
+                try {
+                  await deleteException(exToDelete.id);
+                  setExToDelete(null);
+                  agenda.reload();
+                } finally {
+                  setExBusy(false);
+                }
+              }}
+            >
+              {exBusy ? 'Eliminando…' : 'Eliminar'}
+            </button>
+            <button className="btn btn-outline-secondary" disabled={exBusy} onClick={() => setExToDelete(null)}>
+              Cancelar
+            </button>
+          </div>
+        </ModalShell>
       )}
       {voiceOpen && (
         <VoiceSheet

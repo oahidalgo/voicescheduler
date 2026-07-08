@@ -39,9 +39,18 @@ export interface DayViewProps {
   /** RN-162: tap en zona libre abre el formulario con la hora pre-llenada */
   onTapEmpty?: (startMin: number) => void;
   onTapAppointment?: (appt: UiAppointment) => void;
+  onTapException?: (exception: CalendarException) => void;
 }
 
-export function DayView({ date, appointments, exceptions, config, onTapEmpty, onTapAppointment }: DayViewProps) {
+export function DayView({
+  date,
+  appointments,
+  exceptions,
+  config,
+  onTapEmpty,
+  onTapAppointment,
+  onTapException,
+}: DayViewProps) {
   const dayAppts = appointments.filter(a => a.date === date && a.status !== 'cancelled');
   const clinic = layoutLanes(dayAppts.filter(a => a.mode === 'in_clinic'));
   const home = dayAppts.filter(a => a.mode === 'home_visit');
@@ -106,7 +115,23 @@ export function DayView({ date, appointments, exceptions, config, onTapEmpty, on
         ))}
         {dayExceptions.map((e, i) =>
           e.type === 'time_block' ? (
-            <div key={`ex-${i}`} className="vs-exception" style={{ top: y(e.startMin) + 1, height: h(e.startMin, e.endMin) - 2 }}>
+            <div
+              key={`ex-${i}`}
+              className="vs-exception"
+              style={{
+                top: y(e.startMin) + 1,
+                height: h(e.startMin, e.endMin) - 2,
+                cursor: onTapException ? 'pointer' : undefined,
+              }}
+              onClick={
+                onTapException
+                  ? ev => {
+                      ev.stopPropagation();
+                      onTapException(e);
+                    }
+                  : undefined
+              }
+            >
               <i className="bi bi-lock" aria-hidden="true" />
               {e.reason ?? 'Bloqueado'}
             </div>

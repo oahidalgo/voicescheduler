@@ -3,14 +3,17 @@ import {
   addDays,
   dayDiff,
   effectiveRanges,
+  expandWeeklySeries,
   resolveRelativeDate,
   toHHMM,
+  validateSeries,
   zonedNow,
 } from '@voicescheduler/core';
-import type { CalendarException, CoreConfig, Mode, RelativeDate } from '@voicescheduler/core';
+import type { CalendarException, CoreConfig, Mode, RelativeDate, Weekday } from '@voicescheduler/core';
 import {
   createAppointment,
   createException,
+  createSeries,
   fetchAppointments,
   interpretCommand,
   logVoiceCommand,
@@ -40,6 +43,7 @@ const dateFmt = new Intl.DateTimeFormat('es-GT', {
 });
 const fmtDate = (iso: string) => dateFmt.format(new Date(`${iso}T00:00:00Z`));
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const DAY_NAMES = ['', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
 
 const SR: (new () => SpeechRecognitionLike) | undefined =
   (window as unknown as Record<string, never>)['SpeechRecognition'] ??
@@ -314,6 +318,9 @@ export function VoiceSheet({ live, config, exceptions, onClose, onExecuted }: Vo
   }
 
   async function doSchedule(intent: VoiceIntent, capturedAt: Date, low: boolean) {
+    if (intent.recurrence && intent.recurrence.weekdays.length > 0) {
+      return doScheduleSeries(intent, capturedAt, low);
+    }
     if (!intent.patientName || !intent.date || !intent.time) {
       setPhase({ k: 'input', prompt: '¿Paciente, día y hora?' });
       return;
@@ -346,6 +353,79 @@ export function VoiceSheet({ live, config, exceptions, onClose, onExecuted }: Vo
       patientName: patient.id ? null : patient.name,
     });
     finish(`Cita agendada: ${patient.name}, ${fmtDate(date)} a las ${toHHMM(startMin)}.`);
+  }
+
+  // RN-070/071: "Agenda a Luis lunes y jueves a las 3, 12 sesiones"
+  async function doScheduleSeries(intent: VoiceIntent, capturedAt: Date, low: boolean) {
+    if (!intent.patientName || !intent.time) {
+      setPhase({ k: 'input', prompt: '¿Paciente y a qué hora?' });
+      return;
+    }
+    const sessions = intent.recurrence?.sessions;
+    if (!sessions || sessions < 1) {
+      setPhase({ k: 'input', prompt: '¿Cuántas sesiones serán?' });
+      return;
+    }
+    const firstDate = intent.date ? resolveDateOnly(intent.date, capturedAt) : zonedNow(tz, capturedAt).date;
+    if (!firstDate) {
+      setPhase({ k: 'input', prompt: '¿A partir de qué día?' });
+      return;
+    }
+    const weekdays = [...new Set(intent.recurrence!.weekdays)]
+      .filter(d => d >= 1 && d <= 7)
+      .sort((a, b) => a - b) as Weekday[];
+    const mode = intent.mode ?? config.defaultMode;
+    const durationMin = intent.durationMinutes ?? config.defaultDurationMin;
+    const startMin = await resolveTime(intent.time, firstDate, mode, durationMin);
+
+    setPhase({ k: 'busy', label: 'Validando la serie…' });
+    const occurrences = expandWeeklySeries({
+      weekdays,
+      startMin,
+      durationMin,
+      mode,
+      firstDate,
+      end: { type: 'count', sessions },
+    });
+    if (occurrences.length === 0) {
+      setPhase({ k: 'error', message: 'La serie no genera ninguna sesión. Revisa los días indicados.' });
+      return;
+    }
+    const lastDate = occurrences[occurrences.length - 1]!.date;
+    const existing = await fetchAppointments(tz, firstDate, dayDiff(firstDate, lastDate) + 1);
+    const results = validateSeries(occurrences, config, existing, exceptions);
+    const valid = results.filter(r => r.ok).map(r => r.occurrence);
+    const conflicts = results.filter(r => !r.ok);
+    if (valid.length === 0) {
+      setPhase({ k: 'error', message: 'Ninguna sesión de la serie tiene horario disponible.' });
+      return;
+    }
+
+    const patient = await resolvePatient(intent.patientName);
+    const lines = [
+      patient.id ? `Paciente: ${patient.name}` : `Crear paciente: ${patient.name}`,
+      `${weekdays.map(d => DAY_NAMES[d]).join(' y ')} · ${toHHMM(startMin)} · ${valid.length} sesiones`,
+      `Primera ${fmtDate(valid[0]!.date)} · última ${fmtDate(valid[valid.length - 1]!.date)}`,
+      mode === 'home_visit' ? 'Domicilio' : 'Clínica',
+    ];
+    if (conflicts.length > 0) {
+      lines.push(`Se omiten ${conflicts.length} por conflicto: ${conflicts.map(c => fmtDate(c.occurrence.date)).join(', ')}`);
+    }
+    const ok = await ask<boolean>({ k: 'confirm', title: 'Agendar serie', lines, low }); // RN-110
+    if (!ok) return resetToInput();
+    setPhase({ k: 'busy', label: 'Agendando la serie…' });
+    await createSeries({
+      tz,
+      occurrences: valid.map(o => ({ date: o.date, startMin: o.startMin })),
+      durationMin,
+      mode,
+      patientId: patient.id,
+      patientName: patient.id ? null : patient.name,
+      weekdays,
+      startMin,
+      endSessions: sessions,
+    });
+    finish(`Serie agendada: ${patient.name}, ${valid.length} sesiones desde el ${fmtDate(valid[0]!.date)}.`);
   }
 
   async function doCancel(intent: VoiceIntent, capturedAt: Date, low: boolean) {

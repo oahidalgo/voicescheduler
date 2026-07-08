@@ -18,12 +18,41 @@ export async function fetchConfig(): Promise<CoreConfig> {
   return parseConfig(data.config as TenantConfigJson);
 }
 
+export interface ConfigVersion {
+  version: number;
+  config: TenantConfigJson;
+}
+
+/** Config cruda (JSON) con su número de versión, para la pantalla de ajustes */
+export async function fetchConfigRaw(): Promise<ConfigVersion> {
+  const { data, error } = await client().from('tenant_current_config').select('version, config').single();
+  if (error) throw new Error(`No se pudo cargar la configuración: ${error.message}`);
+  return { version: data.version as number, config: data.config as TenantConfigJson };
+}
+
+/**
+ * RN-140/143: guardar = insertar versión nueva (nunca UPDATE). El trigger de
+ * auditoría registra el valor anterior; el unique(tenant, version) protege
+ * contra guardados concurrentes.
+ */
+export async function saveConfigVersion(config: TenantConfigJson, currentVersion: number): Promise<void> {
+  const c = client();
+  const { data: userData } = await c.auth.getUser();
+  const { error } = await c.from('tenant_config_versions').insert({
+    tenant_id: await tenantId(),
+    version: currentVersion + 1,
+    config,
+    created_by: userData.user?.id ?? null,
+  });
+  if (error) throw new Error(error.message);
+}
+
 export async function fetchAppointments(tz: string, fromDate: string, days: number): Promise<UiAppointment[]> {
   const fromIso = zonedTimeToUtc(fromDate, 0, tz).toISOString();
   const toIso = zonedTimeToUtc(addDays(fromDate, days), 0, tz).toISOString();
   const { data, error } = await client()
     .from('appointments')
-    .select('id, starts_at, duration_min, mode, status, payment_status, patient:patients(id, name)')
+    .select('id, starts_at, duration_min, mode, status, payment_status, series_id, patient:patients(id, name)')
     .gte('starts_at', fromIso)
     .lt('starts_at', toIso)
     .neq('status', 'cancelled')
@@ -42,25 +71,31 @@ export async function fetchAppointments(tz: string, fromDate: string, days: numb
       patientName: patient?.name ?? 'Paciente',
       patientId: patient?.id,
       paid: r.payment_status === 'paid',
+      seriesId: (r.series_id as string | null) ?? undefined,
     };
   });
 }
 
-export async function fetchExceptions(): Promise<CalendarException[]> {
+/** Excepción con su id de fila, para poder eliminarla desde la UI */
+export type TenantException = CalendarException & { id: string };
+
+export async function fetchExceptions(): Promise<TenantException[]> {
   const { data, error } = await client()
     .from('calendar_exceptions')
-    .select('type, date_from, date_to, time_from, time_to, modes, reason');
+    .select('id, type, date_from, date_to, time_from, time_to, modes, reason');
   if (error) throw new Error(`No se pudieron cargar las excepciones: ${error.message}`);
   const hhmm = (t: string) => toMinutes(t.slice(0, 5));
-  return (data ?? []).map((r): CalendarException => {
+  return (data ?? []).map((r): TenantException => {
+    const id = r.id as string;
     const reason = (r.reason as string | null) ?? undefined;
     switch (r.type as string) {
       case 'holiday':
-        return { type: 'holiday', date: r.date_from as string, reason };
+        return { id, type: 'holiday', date: r.date_from as string, reason };
       case 'vacation':
-        return { type: 'vacation', dateFrom: r.date_from as string, dateTo: r.date_to as string, reason };
+        return { id, type: 'vacation', dateFrom: r.date_from as string, dateTo: r.date_to as string, reason };
       case 'extended_hours':
         return {
+          id,
           type: 'extended_hours',
           date: r.date_from as string,
           startMin: hhmm(r.time_from as string),
@@ -70,6 +105,7 @@ export async function fetchExceptions(): Promise<CalendarException[]> {
         };
       default:
         return {
+          id,
           type: 'time_block',
           date: r.date_from as string,
           startMin: hhmm(r.time_from as string),
@@ -78,6 +114,63 @@ export async function fetchExceptions(): Promise<CalendarException[]> {
         };
     }
   });
+}
+
+export async function deleteException(id: string): Promise<void> {
+  const { error } = await client().from('calendar_exceptions').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export interface CreateSeriesParams {
+  tz: string;
+  /** Ocurrencias ya validadas por el core (RN-071); las omitidas no vienen */
+  occurrences: { date: string; startMin: number }[];
+  durationMin: number;
+  mode: Mode;
+  patientId: string | null;
+  patientName: string | null;
+  weekdays: number[];
+  startMin: number;
+  endSessions: number;
+}
+
+/** RN-070/072: crea la serie completa en una sola transacción */
+export async function createSeries(p: CreateSeriesParams): Promise<void> {
+  const { error } = await client().rpc('create_series', {
+    p_starts: p.occurrences.map(o => zonedTimeToUtc(o.date, o.startMin, p.tz).toISOString()),
+    p_duration_min: p.durationMin,
+    p_mode: p.mode,
+    p_weekdays: p.weekdays,
+    p_start_time: toHHMM(p.startMin),
+    p_ends_by: 'count',
+    p_patient_id: p.patientId,
+    p_patient_name: p.patientName,
+    p_end_sessions: p.endSessions,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * RN-072: cancelación con alcance. Sin fromDate cancela toda la serie;
+ * con fromDate/fromStartMin cancela esa sesión y las siguientes.
+ */
+export async function cancelSeriesAppointments(p: {
+  seriesId: string;
+  tz: string;
+  fromDate?: string;
+  fromStartMin?: number;
+  reason?: string;
+}): Promise<void> {
+  let query = client()
+    .from('appointments')
+    .update({ status: 'cancelled', cancellation_reason: p.reason ?? null })
+    .eq('series_id', p.seriesId)
+    .eq('status', 'scheduled');
+  if (p.fromDate !== undefined && p.fromStartMin !== undefined) {
+    query = query.gte('starts_at', zonedTimeToUtc(p.fromDate, p.fromStartMin, p.tz).toISOString());
+  }
+  const { error } = await query;
+  if (error) throw new Error(error.message);
 }
 
 export interface CreateAppointmentParams {

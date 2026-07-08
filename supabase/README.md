@@ -10,6 +10,7 @@ requieren una cuenta en [supabase.com](https://supabase.com) (el plan free basta
 | `migrations/0001_schema.sql` | Extensiones (pg_trgm, unaccent), enums, tablas, índices y triggers (RN-082, RN-131, RN-143) |
 | `migrations/0002_rls.sql` | Row Level Security en todas las tablas (RN-001) |
 | `migrations/0003_functions.sql` | RPCs: `create_appointment`, `reschedule_appointment`, `search_patients` (RN-122), `anonymize_patient` (RN-152) |
+| `migrations/0004_series.sql` | RPC `create_series`: series semanales en una transacción (RN-070..072) |
 | `seed.sql` | Plantilla `physiotherapy` (RN-141) + receta comentada para el alta del tenant fundador |
 
 ## Cómo aplicar

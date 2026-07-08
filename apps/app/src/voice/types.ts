@@ -21,6 +21,11 @@ export interface VoiceIntent {
   queryVariant?: QueryVariant;
   newDate?: RelativeDate;
   newTime?: SpokenTime;
+  /** RN-070: patrón semanal — "lunes y jueves a las 3, 12 sesiones" */
+  recurrence?: {
+    weekdays: number[];
+    sessions?: number;
+  };
   block?: {
     allDay: boolean;
     timeFrom?: SpokenTime;

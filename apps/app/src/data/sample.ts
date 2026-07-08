@@ -15,6 +15,7 @@ export interface UiAppointment extends ExistingAppointment {
   patientName: string;
   patientId?: string;
   paid: boolean;
+  seriesId?: string;
 }
 
 const d = (offset: number) => addDays(monday, offset);
