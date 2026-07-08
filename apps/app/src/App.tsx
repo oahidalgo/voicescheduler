@@ -7,6 +7,7 @@ import { AppointmentDetailModal, BlockTimeModal, ModalShell, NewAppointmentModal
 import { deleteException } from './lib/api';
 import { LoginScreen } from './auth/LoginScreen';
 import { PatientsScreen } from './patients/PatientsScreen';
+import { SettingsScreen } from './settings/SettingsScreen';
 import { VoiceSheet } from './voice/VoiceSheet';
 import { useAgenda } from './hooks/useAgenda';
 import { supabase } from './lib/supabase';
@@ -155,24 +156,7 @@ function AgendaApp({ live, email }: { live: boolean; email: string | null }) {
         {screen === 'patients' ? (
           <PatientsScreen live={live} />
         ) : screen === 'settings' ? (
-          <div className="p-2">
-            <div className="card border-0 shadow-sm mb-3">
-              <div className="card-body">
-                <p className="mb-1 small text-secondary">Sesión</p>
-                <p className="mb-3">{email ?? 'modo ejemplo (sin sesión)'}</p>
-                {live && (
-                  <button className="btn btn-outline-danger btn-sm" onClick={() => supabase?.auth.signOut()}>
-                    <i className="bi bi-box-arrow-right me-1" />
-                    Cerrar sesión
-                  </button>
-                )}
-              </div>
-            </div>
-            <p className="small text-secondary px-1">
-              Zona horaria del negocio: {agenda.config.timezone}. La edición de horarios y notificaciones llega en la
-              fase de configuración.
-            </p>
-          </div>
+          <SettingsScreen live={live} email={email} exceptions={agenda.exceptions} onSaved={agenda.reload} />
         ) : view === 'day' ? (
           <DayView
             date={selectedDate}
