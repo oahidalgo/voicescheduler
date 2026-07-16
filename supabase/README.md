@@ -11,6 +11,7 @@ requieren una cuenta en [supabase.com](https://supabase.com) (el plan free basta
 | `migrations/0002_rls.sql` | Row Level Security en todas las tablas (RN-001) |
 | `migrations/0003_functions.sql` | RPCs: `create_appointment`, `reschedule_appointment`, `search_patients` (RN-122), `anonymize_patient` (RN-152) |
 | `migrations/0004_series.sql` | RPC `create_series`: series semanales en una transacción (RN-070..072) |
+| `migrations/0005_push.sql` | Suscripciones Web Push + jobs pg_cron: notify cada minuto y retención RN-153 |
 | `seed.sql` | Plantilla `physiotherapy` (RN-141) + receta comentada para el alta del tenant fundador |
 
 ## Cómo aplicar
@@ -53,6 +54,25 @@ npx supabase functions deploy interpret
 Alternativa sin CLI: en el dashboard, Edge Functions → Deploy new function →
 pegar el contenido de `functions/interpret/index.ts` con el nombre `interpret`,
 y en Settings → Edge Functions → Secrets agregar `ANTHROPIC_API_KEY`.
+
+## Edge Function `notify` (fase 3 — push)
+
+`functions/notify/index.ts` envía los recordatorios pre-cita (RN-131) y los
+resúmenes de mañana/tarde (RN-132/133) por Web Push. La dispara el job de
+pg_cron creado en `0005_push.sql` cada minuto.
+
+Secretos requeridos (las claves VAPID se generan una sola vez):
+
+```bash
+npx supabase secrets set VAPID_PUBLIC_KEY=<clave-pública>
+npx supabase secrets set VAPID_PRIVATE_KEY=<clave-privada>
+npx supabase secrets set VAPID_SUBJECT=mailto:tu-correo@ejemplo.com
+npx supabase functions deploy notify
+```
+
+La misma clave pública va en la app como `VITE_VAPID_PUBLIC_KEY` (en
+`.env.local` y en las variables de entorno de Netlify). El profesional activa
+las notificaciones por dispositivo desde Ajustes → Notificaciones.
 
 ## Pendiente tras crear el proyecto
 

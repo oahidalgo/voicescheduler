@@ -320,3 +320,4 @@ al mismo sistema (principio del §8 de reglas).
 |---|---|
 | 2026-07-06 | Versión inicial: Expo/React Native + Supabase + core compartido |
 | 2026-07-06 | El owner define que la plantilla visual será Bootstrap → D-1 cambia a React + Bootstrap 5 + Capacitor. Supabase (D-3) y la dirección visual quedan confirmados. Las notificaciones (D-7) pasan de Expo Push a FCM/APNs |
+| 2026-07-08 | La app se publica como PWA en Netlify (decisión del owner). D-7 se ajusta: las notificaciones de V1 salen por **Web Push (VAPID)** sobre la PWA — funciona hoy sin empaquetar; FCM/APNs se mantiene para la fase Capacitor/tiendas. La retención RN-153 se implementa con jobs de pg_cron (0005_push.sql) |

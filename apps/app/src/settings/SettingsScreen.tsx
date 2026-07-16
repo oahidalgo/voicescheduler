@@ -1,8 +1,24 @@
 import { useEffect, useState } from 'react';
 import { effectiveRanges, parseConfig, toHHMM, validateConfigJson, zonedNow } from '@voicescheduler/core';
 import type { CalendarException, Mode, TenantConfigJson } from '@voicescheduler/core';
-import { fetchAppointments, fetchConfigRaw, saveConfigVersion } from '../lib/api';
+import {
+  fetchAppointments,
+  fetchConfigRaw,
+  removePushSubscription,
+  saveConfigVersion,
+  savePushSubscription,
+} from '../lib/api';
 import { supabase } from '../lib/supabase';
+
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+
+function urlBase64ToUint8Array(base64: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64.length % 4)) % 4);
+  const raw = atob((base64 + padding).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
+
+type PushState = 'unsupported' | 'off' | 'on' | 'busy' | 'denied';
 
 const DAYS: [string, string][] = [
   ['monday', 'Lunes'],
@@ -30,6 +46,62 @@ export function SettingsScreen({ live, email, exceptions, onSaved }: SettingsScr
   /** RN-142: citas futuras que la nueva config dejaría fuera de horario */
   const [warnings, setWarnings] = useState<string[] | null>(null);
   const [saved, setSaved] = useState(false);
+  const [push, setPush] = useState<PushState>('unsupported');
+  const [pushError, setPushError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!live || !VAPID_PUBLIC_KEY) return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    void (async () => {
+      try {
+        const reg = await navigator.serviceWorker.register('/sw.js');
+        const sub = await reg.pushManager.getSubscription();
+        setPush(sub ? 'on' : Notification.permission === 'denied' ? 'denied' : 'off');
+      } catch {
+        setPush('unsupported');
+      }
+    })();
+  }, [live]);
+
+  async function enablePush() {
+    if (!VAPID_PUBLIC_KEY) return;
+    setPush('busy');
+    setPushError(null);
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        setPush(permission === 'denied' ? 'denied' : 'off');
+        return;
+      }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as BufferSource,
+      });
+      await savePushSubscription(sub);
+      setPush('on');
+    } catch (e) {
+      setPushError(e instanceof Error ? e.message : 'No se pudo activar');
+      setPush('off');
+    }
+  }
+
+  async function disablePush() {
+    setPush('busy');
+    setPushError(null);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await removePushSubscription(sub.endpoint);
+        await sub.unsubscribe();
+      }
+      setPush('off');
+    } catch (e) {
+      setPushError(e instanceof Error ? e.message : 'No se pudo desactivar');
+      setPush('on');
+    }
+  }
 
   useEffect(() => {
     if (!live) return;
@@ -394,9 +466,37 @@ export function SettingsScreen({ live, email, exceptions, onSaved }: SettingsScr
               />
             </div>
           </div>
-          <small className="text-secondary d-block mt-2">
-            Los envíos push se activan al empaquetar la app (fase de notificaciones); los valores ya quedan guardados.
-          </small>
+          <hr className="my-3" />
+          <p className="mb-2 small fw-semibold">Notificaciones en este dispositivo</p>
+          {push === 'unsupported' && (
+            <small className="text-secondary">
+              Este navegador no soporta notificaciones push (en iPhone: instala la app en la pantalla de inicio
+              primero).
+            </small>
+          )}
+          {push === 'denied' && (
+            <small className="text-danger">
+              Las notificaciones están bloqueadas para este sitio. Habilítalas en la configuración del navegador.
+            </small>
+          )}
+          {(push === 'off' || push === 'busy') && (
+            <button className="btn btn-primary btn-sm" disabled={push === 'busy'} onClick={() => void enablePush()}>
+              <i className="bi bi-bell me-1" />
+              {push === 'busy' ? 'Activando…' : 'Activar en este dispositivo'}
+            </button>
+          )}
+          {push === 'on' && (
+            <div className="d-flex align-items-center gap-2">
+              <span className="badge text-bg-success">
+                <i className="bi bi-check-circle me-1" />
+                Activadas
+              </span>
+              <button className="btn btn-outline-secondary btn-sm" onClick={() => void disablePush()}>
+                Desactivar
+              </button>
+            </div>
+          )}
+          {pushError && <div className="alert alert-danger py-1 small mt-2 mb-0">{pushError}</div>}
         </div>
       </div>
 

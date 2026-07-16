@@ -116,6 +116,33 @@ export async function fetchExceptions(): Promise<TenantException[]> {
   });
 }
 
+/** RN-130: registra este dispositivo para recibir push del profesional */
+export async function savePushSubscription(sub: PushSubscription): Promise<void> {
+  const json = sub.toJSON();
+  if (!json.endpoint || !json.keys?.['p256dh'] || !json.keys?.['auth']) {
+    throw new Error('La suscripción push del navegador es inválida');
+  }
+  const c = client();
+  const { data: userData } = await c.auth.getUser();
+  if (!userData.user) throw new Error('Sin sesión activa');
+  const { error } = await c.from('push_subscriptions').upsert(
+    {
+      tenant_id: await tenantId(),
+      user_id: userData.user.id,
+      endpoint: json.endpoint,
+      p256dh: json.keys['p256dh'],
+      auth: json.keys['auth'],
+    },
+    { onConflict: 'endpoint' },
+  );
+  if (error) throw new Error(error.message);
+}
+
+export async function removePushSubscription(endpoint: string): Promise<void> {
+  const { error } = await client().from('push_subscriptions').delete().eq('endpoint', endpoint);
+  if (error) throw new Error(error.message);
+}
+
 export async function deleteException(id: string): Promise<void> {
   const { error } = await client().from('calendar_exceptions').delete().eq('id', id);
   if (error) throw new Error(error.message);
