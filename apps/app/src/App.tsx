@@ -72,7 +72,7 @@ function AgendaApp({ live, email }: { live: boolean; email: string | null }) {
       ? { label: 'sincronizando…', className: 'text-bg-light border' }
       : agenda.error
         ? { label: agenda.error, className: 'text-bg-danger' }
-        : { label: 'Supabase conectado', className: 'text-bg-success' };
+        : null;
 
   return (
     <div className="vs-shell">
@@ -116,11 +116,13 @@ function AgendaApp({ live, email }: { live: boolean; email: string | null }) {
               {unpaid > 0 && ` · ${unpaid} sin pagar`}
             </small>
           )}
-          <div>
-            <span className={`badge rounded-pill ${badge.className}`} style={{ fontSize: 10 }}>
-              {badge.label}
-            </span>
-          </div>
+          {badge && (
+            <div>
+              <span className={`badge rounded-pill ${badge.className}`} style={{ fontSize: 10 }}>
+                {badge.label}
+              </span>
+            </div>
+          )}
         </div>
         {screen === 'agenda' && (
           <div className="d-flex align-items-center gap-2">
