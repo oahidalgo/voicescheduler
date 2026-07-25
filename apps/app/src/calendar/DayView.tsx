@@ -2,12 +2,9 @@ import { effectiveRanges, mergeRanges, toHHMM } from '@voicescheduler/core';
 import type { CalendarException, CoreConfig, TimeRange } from '@voicescheduler/core';
 import type { UiAppointment } from '../data/sample';
 
-const START = 480; // 8:00
-const END = 1260; // 21:00
+const DEFAULT_START = 480; // 8:00
+const DEFAULT_END = 1260; // 21:00
 const HOUR_PX = 48;
-
-const y = (min: number) => ((min - START) / 60) * HOUR_PX;
-const h = (from: number, to: number) => y(to) - y(from);
 
 interface Positioned extends UiAppointment {
   lane: number;
@@ -60,6 +57,21 @@ export function DayView({
     ...effectiveRanges(date, 'in_clinic', config, exceptions),
     ...effectiveRanges(date, 'home_visit', config, exceptions),
   ]);
+
+  // La cuadrícula se amplía para siempre cubrir citas y horario de atención,
+  // aunque caigan fuera del rango por defecto (p.ej. citas antes de las 8:00).
+  const candidateStarts = [DEFAULT_START, ...dayAppts.map(a => a.startMin), ...working.map(r => r.startMin)];
+  const candidateEnds = [
+    DEFAULT_END,
+    ...dayAppts.map(a => a.startMin + a.durationMin),
+    ...working.map(r => r.endMin),
+  ];
+  const START = Math.floor(Math.min(...candidateStarts) / 60) * 60;
+  const END = Math.ceil(Math.max(...candidateEnds) / 60) * 60;
+
+  const y = (min: number) => ((min - START) / 60) * HOUR_PX;
+  const h = (from: number, to: number) => y(to) - y(from);
+
   const dims: TimeRange[] = [];
   let cursor = START;
   for (const r of working) {

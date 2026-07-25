@@ -2,11 +2,9 @@ import { addDays, effectiveRanges, mergeRanges } from '@voicescheduler/core';
 import type { CalendarException, CoreConfig } from '@voicescheduler/core';
 import type { UiAppointment } from '../data/sample';
 
-const START = 540; // 9:00
-const END = 1260; // 21:00
+const DEFAULT_START = 540; // 9:00
+const DEFAULT_END = 1260; // 21:00
 const HOUR_PX = 24;
-
-const y = (min: number) => ((min - START) / 60) * HOUR_PX;
 
 const DAY_LETTERS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
@@ -28,6 +26,23 @@ export function WeekView({ monday, today, appointments, exceptions, config, onSe
     ]);
     return { letter, date, dayNum: Number(date.slice(8)), working };
   });
+
+  // La cuadrícula se amplía para siempre cubrir citas y horario de atención,
+  // aunque caigan fuera del rango por defecto (p.ej. citas antes de las 9:00).
+  const weekAppts = appointments.filter(a => a.status === 'scheduled' && days.some(d => d.date === a.date));
+  const candidateStarts = [
+    DEFAULT_START,
+    ...weekAppts.map(a => a.startMin),
+    ...days.flatMap(d => d.working.map(r => r.startMin)),
+  ];
+  const candidateEnds = [
+    DEFAULT_END,
+    ...weekAppts.map(a => a.startMin + a.durationMin),
+    ...days.flatMap(d => d.working.map(r => r.endMin)),
+  ];
+  const START = Math.floor(Math.min(...candidateStarts) / 60) * 60;
+  const END = Math.ceil(Math.max(...candidateEnds) / 60) * 60;
+  const y = (min: number) => ((min - START) / 60) * HOUR_PX;
 
   const gridHeight = y(END);
   const hourLabels = [];
